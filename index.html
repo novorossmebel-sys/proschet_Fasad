@@ -167,11 +167,11 @@
       <span class="tagline">Расчёт стоимости фасадов · МДФ / шпон</span>
     </div>
     <span class="saved-flag" id="savedFlag"></span>
-    <select class="btn" id="loadSelect" title="Открыть сохранённый расчёт" style="max-width:190px">
+    <select class="btn" id="loadSelect" title="10 последних расчётов" style="max-width:190px">
       <option value="">Открыть расчёт…</option>
     </select>
     <button class="btn" id="newBtn">＋ Новый</button>
-    <button class="btn" id="exportBtn">⭳ Экспорт</button>
+    <button class="btn" id="saveBtn">💾 Сохранить файл</button>
     <button class="btn primary" id="printBtn">🖶 Печать / PDF</button>
   </div>
 
@@ -268,9 +268,12 @@
 
   <div class="foot-hint no-print">
     Навигация по таблице — стрелками ↑ ↓ ← → и Enter, как в Excel. Галочка «обратка» делает строку жирной и добавляет цену покраски обратной стороны.
-    Данные автосохраняются в браузере под именем из поля «Наименование / заказчик».
+    В памяти браузера хранятся 10 последних расчётов (под именем из поля «Наименование / заказчик»); кнопка «Сохранить файл» выгружает расчёт отдельным документом.
   </div>
 </div>
+
+<!-- Встроенные данные для сохранённого документа (заполняется при «Сохранить файл») -->
+<script id="embedded-data" type="application/json"></script>
 
 <script>
 "use strict";
@@ -296,7 +299,8 @@ const THK=["16","19","22"];
 const DEF={ obrPaint:4500, obrVeneer:5500, minArea:0.7, markup:0 };
 
 let state=null, finishes=[], opts={...DEF}, currentName="";
-const LS_PREFIX="sreda_calc_v1__", LS_PRICES="sreda_prices_v3";
+const LS_PREFIX="sreda_calc_v1__", LS_PRICES="sreda_prices_v3", LS_INDEX="sreda_recent_v1";
+const MAX_RECENT=10;
 const $=s=>document.querySelector(s);
 
 /* ===== утилиты ===== */
@@ -502,22 +506,43 @@ function onCellKey(e){
   if(handled) e.preventDefault();
 }
 
-/* ===== автосохранение ===== */
+/* ===== список 10 последних (индекс по свежести) ===== */
+function readIndex(){ try{ return JSON.parse(localStorage.getItem(LS_INDEX))||[]; }catch(e){ return []; } }
+function writeIndex(ix){ try{ localStorage.setItem(LS_INDEX,JSON.stringify(ix)); }catch(e){} }
+function ensureIndex(){
+  let ix=readIndex();
+  if(!ix.length){
+    const arr=[];
+    for(let i=0;i<localStorage.length;i++){ const k=localStorage.key(i);
+      if(k&&k.startsWith(LS_PREFIX)){ const nm=k.slice(LS_PREFIX.length); let ts=0;
+        try{ ts=(JSON.parse(localStorage.getItem(k))||{}).savedAt||0; }catch(e){}
+        arr.push({name:nm,ts}); } }
+    arr.sort((a,b)=>b.ts-a.ts);
+    arr.slice(MAX_RECENT).forEach(e=>localStorage.removeItem(LS_PREFIX+e.name)); // держим только 10
+    ix=arr.slice(0,MAX_RECENT); writeIndex(ix);
+  }
+}
+
+/* ===== автосохранение (память: 10 последних) ===== */
 let saveTimer=null;
 function scheduleSave(){ clearTimeout(saveTimer); saveTimer=setTimeout(persist,400); }
 function persist(){
   const name=(state.docName||"").trim(); if(!name){ flagSaved(""); return; }
-  currentName=name;
-  try{ localStorage.setItem(LS_PREFIX+name,JSON.stringify(state)); flagSaved("Сохранено ✓"); refreshLoadList(); }
-  catch(e){ flagSaved("Ошибка сохранения"); }
+  currentName=name; state.savedAt=Date.now();
+  try{
+    localStorage.setItem(LS_PREFIX+name,JSON.stringify(state));
+    let ix=readIndex().filter(e=>e.name!==name);
+    ix.unshift({name,ts:state.savedAt});
+    while(ix.length>MAX_RECENT){ const rm=ix.pop(); if(rm.name!==name) localStorage.removeItem(LS_PREFIX+rm.name); }
+    writeIndex(ix);
+    flagSaved("Сохранено ✓"); refreshLoadList();
+  }catch(e){ flagSaved("Ошибка сохранения"); }
 }
 function flagSaved(t){ const f=$("#savedFlag"); f.textContent=t; f.classList.toggle("show",t.includes("✓"));
   if(t.includes("✓")) setTimeout(()=>{f.textContent="";f.classList.remove("show");},1800); }
 function refreshLoadList(){
-  const sel=$("#loadSelect"); const keys=[];
-  for(let i=0;i<localStorage.length;i++){ const k=localStorage.key(i); if(k&&k.startsWith(LS_PREFIX)) keys.push(k.slice(LS_PREFIX.length)); }
-  keys.sort((a,b)=>a.localeCompare(b,"ru"));
-  sel.innerHTML=`<option value="">Открыть расчёт…</option>`+keys.map(k=>`<option value="${escapeAttr(k)}"${k===currentName?" selected":""}>${escapeHtml(k)}</option>`).join("");
+  const sel=$("#loadSelect"); const ix=readIndex().filter(e=>localStorage.getItem(LS_PREFIX+e.name)!=null);
+  sel.innerHTML=`<option value="">Открыть расчёт…</option>`+ix.map(e=>`<option value="${escapeAttr(e.name)}"${e.name===currentName?" selected":""}>${escapeHtml(e.name)}</option>`).join("");
 }
 function migrate(s){
   // старый формат (одна таблица) -> facades[]
@@ -536,12 +561,25 @@ function loadDoc(name){
   }catch(e){}
 }
 
-/* ===== экспорт ===== */
-function exportJson(){
-  const name=(state.docName||"raschet").replace(/[^\wа-яёА-ЯЁ .\-]/gi,"_");
-  const blob=new Blob([JSON.stringify(state,null,2)],{type:"application/json"});
-  const a=document.createElement("a"); a.href=URL.createObjectURL(blob); a.download=name+".json"; a.click();
+/* ===== сохранить файл (самодостаточный .html документ) ===== */
+async function saveDocumentFile(){
+  const name=(state.docName||"raschet").trim();
+  const payload=JSON.stringify({v:1,state,finishes,opts}).replace(/<\/script>/gi,"<\\/script>");
+  const clone=document.documentElement.cloneNode(true);
+  const dataEl=clone.querySelector("#embedded-data"); if(dataEl) dataEl.textContent=payload;
+  const html="<!DOCTYPE html>\n"+clone.outerHTML;
+  const blob=new Blob([html],{type:"text/html;charset=utf-8"});
+  const fname=(name||"raschet").replace(/[^\wа-яёА-ЯЁ .\-]/gi,"_")+".html";
+  if(window.showSaveFilePicker){
+    try{
+      const handle=await window.showSaveFilePicker({suggestedName:fname,types:[{description:"HTML документ",accept:{"text/html":[".html"]}}]});
+      const w=await handle.createWritable(); await w.write(blob); await w.close();
+      flagSaved("Файл сохранён ✓"); return;
+    }catch(e){ if(e&&e.name==="AbortError") return; }
+  }
+  const a=document.createElement("a"); a.href=URL.createObjectURL(blob); a.download=fname; a.click();
   setTimeout(()=>URL.revokeObjectURL(a.href),1000);
+  flagSaved("Файл сохранён ✓");
 }
 
 /* ===== прайс-панель ===== */
@@ -574,8 +612,20 @@ function refreshAllMatSelects(){
 
 /* ===== init ===== */
 function init(){
-  loadPrices(); state=blankState();
-  $("#docName").value=""; renderFacades(); renderPricePanel(); refreshLoadList();
+  loadPrices();
+  // если файл сохранён как документ — подставить встроенные данные
+  let embedded=null;
+  const de=document.getElementById("embedded-data");
+  if(de&&de.textContent.trim()){ try{ embedded=JSON.parse(de.textContent); }catch(e){} }
+  if(embedded&&embedded.state){
+    if(embedded.finishes) finishes=embedded.finishes;
+    if(embedded.opts) opts={...DEF,...embedded.opts};
+    state=migrate(embedded.state); currentName=(state.docName||"").trim();
+  }else{
+    state=blankState();
+  }
+  ensureIndex();
+  $("#docName").value=state.docName||""; renderFacades(); renderPricePanel(); refreshLoadList();
 
   $("#docName").addEventListener("input",e=>{ state.docName=e.target.value; renderGrandTotals(); document.title="СРЕДА · "+(e.target.value||"расчёт"); scheduleSave(); });
 
@@ -618,7 +668,7 @@ function init(){
 
   // тулбар
   $("#printBtn").addEventListener("click",()=>window.print());
-  $("#exportBtn").addEventListener("click",exportJson);
+  $("#saveBtn").addEventListener("click",saveDocumentFile);
   $("#newBtn").addEventListener("click",()=>{ state=blankState(); currentName=""; $("#docName").value=""; renderFacades(); $("#loadSelect").value=""; document.title="СРЕДА · Расчёт фасадов"; $("#docName").focus(); });
   $("#loadSelect").addEventListener("change",e=>{ if(e.target.value) loadDoc(e.target.value); });
 }
