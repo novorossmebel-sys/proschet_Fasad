@@ -190,9 +190,13 @@
 
     <!-- Имя / заказчик: автосохранение нового файла -->
     <div class="field-row">
-      <div class="field big">
+      <div class="field big" style="flex:2 1 320px">
         <label>Наименование / заказчик <span style="color:var(--accent)">— имя файла, автосохранение</span></label>
         <input id="docName" type="text" placeholder="Например: Иванов А. · кухня" autocomplete="off">
+      </div>
+      <div class="field" style="flex:1 1 200px">
+        <label>Телефон</label>
+        <input id="docPhone" type="tel" inputmode="tel" placeholder="+7" autocomplete="off">
       </div>
     </div>
 
@@ -215,6 +219,7 @@
     <div class="doc-foot">
       <div class="cust">
         Заказчик: <b id="custName">—</b><br>
+        Телефон: <span id="custPhone">—</span><br>
         Итого к оплате: <b id="custSum">0 ₽</b>
       </div>
       <div class="sign-block">
@@ -311,7 +316,7 @@ function todayStr(){ return new Date().toLocaleDateString("ru-RU"); }
 function nearestThk(t){ if(!t) return null; let b=THK[0],d=1e9; for(const k of THK){const dd=Math.abs(t-(+k)); if(dd<d){d=dd;b=k;}} return b; }
 function blankRow(){ return {name:"",nameAuto:true,h:"",w:"",t:"",qty:"",back:false}; }
 function blankFacade(){ return {name:"",material:0,rows:[blankRow(),blankRow(),blankRow()]}; }
-function blankState(){ return {docName:"",date:todayStr(),docNo:String(Date.now()).slice(-5),facades:[blankFacade()]}; }
+function blankState(){ return {docName:"",phone:"+7",date:todayStr(),docNo:String(Date.now()).slice(-5),facades:[blankFacade()]}; }
 function escapeHtml(s){ return String(s).replace(/[&<>]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[c])); }
 function escapeAttr(s){ return String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;"}[c])); }
 
@@ -469,6 +474,7 @@ function renderGrandTotals(){
   $("#totSum").textContent=fmt(sum)+" ₽";
   $("#custSum").textContent=fmt(sum)+" ₽";
   $("#custName").textContent=state.docName||"—";
+  $("#custPhone").textContent=state.phone||"—";
   $("#docNo").textContent=state.docNo; $("#docDate").textContent=state.date;
 }
 
@@ -550,6 +556,7 @@ function migrate(s){
     s.facades=[{name:s.facadeName||"",material:s.material||0,rows:s.rows.map(r=>({name:r.name||"",nameAuto:!(r.name&&r.name.trim()),h:r.h||"",w:r.w||"",t:r.t||"",qty:r.qty||"",back:false}))}];
     delete s.rows; delete s.facadeName; delete s.material;
   }
+  if(s.phone===undefined||s.phone==="") s.phone="+7";
   if(!s.facades||!s.facades.length) s.facades=[blankFacade()];
   s.facades.forEach(f=>{ if(!f.rows||!f.rows.length) f.rows=[blankRow()]; f.rows.forEach(r=>{ if(r.nameAuto===undefined) r.nameAuto=!(r.name&&r.name.trim()); if(r.back===undefined) r.back=false; }); });
   return s;
@@ -557,7 +564,7 @@ function migrate(s){
 function loadDoc(name){
   try{ const raw=localStorage.getItem(LS_PREFIX+name); if(!raw) return;
     state=migrate(JSON.parse(raw)); currentName=name;
-    $("#docName").value=state.docName||""; renderFacades(); document.title="СРЕДА · "+name;
+    $("#docName").value=state.docName||""; $("#docPhone").value=state.phone||"+7"; renderFacades(); document.title="СРЕДА · "+name;
   }catch(e){}
 }
 
@@ -625,9 +632,12 @@ function init(){
     state=blankState();
   }
   ensureIndex();
-  $("#docName").value=state.docName||""; renderFacades(); renderPricePanel(); refreshLoadList();
+  $("#docName").value=state.docName||""; $("#docPhone").value=state.phone||"+7";
+  renderFacades(); renderPricePanel(); refreshLoadList();
 
   $("#docName").addEventListener("input",e=>{ state.docName=e.target.value; renderGrandTotals(); document.title="СРЕДА · "+(e.target.value||"расчёт"); scheduleSave(); });
+  $("#docPhone").addEventListener("input",e=>{ state.phone=e.target.value; renderGrandTotals(); scheduleSave(); });
+  $("#docPhone").addEventListener("focus",e=>{ if(!e.target.value) e.target.value=state.phone="+7"; });
 
   // делегирование по блокам фасадов
   const box=$("#facades");
@@ -669,7 +679,7 @@ function init(){
   // тулбар
   $("#printBtn").addEventListener("click",()=>window.print());
   $("#saveBtn").addEventListener("click",saveDocumentFile);
-  $("#newBtn").addEventListener("click",()=>{ state=blankState(); currentName=""; $("#docName").value=""; renderFacades(); $("#loadSelect").value=""; document.title="СРЕДА · Расчёт фасадов"; $("#docName").focus(); });
+  $("#newBtn").addEventListener("click",()=>{ state=blankState(); currentName=""; $("#docName").value=""; $("#docPhone").value=state.phone; renderFacades(); $("#loadSelect").value=""; document.title="СРЕДА · Расчёт фасадов"; $("#docName").focus(); });
   $("#loadSelect").addEventListener("change",e=>{ if(e.target.value) loadDoc(e.target.value); });
 }
 function onPriceEdit(e){
