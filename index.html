@@ -65,6 +65,15 @@
 
   /* ---------- Таблица позиций ---------- */
   table.grid{width:100%;border-collapse:collapse;margin-top:10px;table-layout:fixed}
+  col.c-num{width:32px}
+  col.c-h,col.c-w{width:64px}
+  col.c-t{width:52px}
+  col.c-q{width:58px}
+  col.c-o{width:60px}
+  col.c-a{width:66px}
+  col.c-p{width:70px}
+  col.c-s{width:76px}
+  col.c-del{width:26px}
   table.grid th{font-size:10.5px;text-transform:uppercase;letter-spacing:.03em;color:var(--muted);
     font-weight:600;text-align:center;padding:8px 4px;border-bottom:1.5px solid var(--line-strong);
     white-space:normal;line-height:1.25;vertical-align:bottom}
@@ -145,15 +154,52 @@
 
   /* ---------- Печать ---------- */
   @media print{
-    @page{size:A4;margin:12mm}
-    body{background:#fff;padding:0;font-size:12px}
+    @page{size:A4;margin:10mm}
+    body{background:#fff;padding:0;font-size:10px}
     .no-print{display:none !important}
     .sheet{border:none;box-shadow:none;border-radius:0;padding:0}
-    .facade{border:1px solid #ccc;page-break-inside:avoid}
-    .field input,.field select{border-bottom:1px solid #bbb}
+
+    /* шапка компактнее */
+    .doc-head{padding-bottom:10px;margin-bottom:12px}
+    .doc-head .logo{font-size:16px}
+    .field-row{gap:14px;margin-bottom:12px}
+    .field label{font-size:8px;margin-bottom:2px}
+    .field input,.field select{font-size:11px;padding:2px 2px;border-bottom:1px solid #bbb}
+    .field.big input{font-size:12px}
+
+    /* блок фасада компактнее */
+    .facade{border:1px solid #ccc;page-break-inside:avoid;padding:10px 12px;margin-bottom:12px}
+    .facade-head{gap:12px;margin-bottom:2px}
+    .facade .fac-no{font-size:8px}
+
+    /* таблица позиций: мелкий шрифт, узкие числовые колонки, широкое «Наименование» */
+    table.grid{margin-top:6px}
+    col.c-h,col.c-w{width:48px}
+    col.c-t{width:38px}
+    col.c-q{width:40px}
+    col.c-o{width:38px}
+    col.c-a{width:48px}
+    col.c-p{width:52px}
+    col.c-s{width:60px}
+    col.c-del{width:0}
+    table.grid th{font-size:8px;padding:4px 3px;letter-spacing:0}
+    table.grid td.num{font-size:9px}
+    table.grid td .cell{font-size:10px;padding:3px 4px;text-overflow:clip}
+    table.grid td .cell.name{letter-spacing:-.01em}
+    table.grid td.calc{font-size:10px;padding:3px 4px}
     table.grid td .cell:focus{background:transparent;box-shadow:none}
-    table.grid td.chk input{-webkit-appearance:checkbox;appearance:checkbox}
-    .doc-foot,.totals{page-break-inside:avoid}
+    table.grid td.chk{width:auto}
+    table.grid td.chk input{-webkit-appearance:checkbox;appearance:checkbox;width:12px;height:12px}
+
+    /* итоги / подпись */
+    .fac-sub{gap:24px;margin-top:8px;padding-top:6px}
+    .fac-sub .s-item .val{font-size:11px}
+    .totals{gap:26px;margin-top:4px;padding-top:10px}
+    .totals .t-item .lbl{font-size:8px}
+    .totals .t-item .val{font-size:12px}
+    .totals .t-item.grand .val{font-size:18px}
+    .doc-foot{margin-top:20px;padding-top:14px}
+    .doc-foot,.totals,.fac-sub{page-break-inside:avoid}
   }
 </style>
 </head>
@@ -397,12 +443,12 @@ function buildFacade(fac,fi){
     </div>
     <table class="grid">
       <colgroup>
-        <col style="width:32px">
-        <col>
-        <col style="width:64px"><col style="width:64px"><col style="width:52px"><col style="width:58px">
-        <col style="width:60px">
-        <col style="width:66px"><col style="width:70px"><col style="width:76px">
-        <col style="width:26px">
+        <col class="c-num">
+        <col class="c-name">
+        <col class="c-h"><col class="c-w"><col class="c-t"><col class="c-q">
+        <col class="c-o">
+        <col class="c-a"><col class="c-p"><col class="c-s">
+        <col class="c-del no-print">
       </colgroup>
       <thead>
         <tr>
