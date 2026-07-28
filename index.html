@@ -64,10 +64,13 @@
   .fac-del:hover{color:var(--danger);background:#faf0ef}
 
   /* ---------- Таблица позиций ---------- */
-  table.grid{width:100%;border-collapse:collapse;margin-top:10px}
-  table.grid th{font-size:10.5px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);
-    font-weight:600;text-align:center;padding:8px 5px;border-bottom:1.5px solid var(--line-strong);white-space:nowrap}
+  table.grid{width:100%;border-collapse:collapse;margin-top:10px;table-layout:fixed}
+  table.grid th{font-size:10.5px;text-transform:uppercase;letter-spacing:.03em;color:var(--muted);
+    font-weight:600;text-align:center;padding:8px 4px;border-bottom:1.5px solid var(--line-strong);
+    white-space:normal;line-height:1.25;vertical-align:bottom}
   table.grid th.left{text-align:left}
+  table.grid td .cell,table.grid td.calc{overflow:hidden;text-overflow:ellipsis}
+  table.grid td .cell.name{text-overflow:ellipsis}
   table.grid td{border-bottom:1px solid var(--line);padding:0;vertical-align:middle}
   table.grid td.num{text-align:center;color:var(--muted);font-variant-numeric:tabular-nums;width:34px;font-size:13px}
   table.grid td .cell{width:100%;border:none;background:transparent;font:inherit;font-size:14px;
@@ -380,14 +383,22 @@ function buildFacade(fac,fi){
       ${state.facades.length>1?`<button class="fac-del no-print" title="Удалить вид фасада">✕</button>`:``}
     </div>
     <table class="grid">
+      <colgroup>
+        <col style="width:32px">
+        <col>
+        <col style="width:64px"><col style="width:64px"><col style="width:52px"><col style="width:58px">
+        <col style="width:60px">
+        <col style="width:66px"><col style="width:70px"><col style="width:76px">
+        <col style="width:26px">
+      </colgroup>
       <thead>
         <tr>
-          <th style="width:34px">№</th>
+          <th>№</th>
           <th class="left">Наименование</th>
-          <th>Высота, мм</th><th>Ширина, мм</th><th>Толщина, мм</th><th>Кол-во, шт</th>
+          <th>Высота, мм</th><th>Ширина, мм</th><th>Толщ., мм</th><th>Кол-во, шт</th>
           <th title="Покраска с обратной стороны">Обратка</th>
           <th>Площадь, м²</th><th>Цена, ₽/м²</th><th>Сумма, ₽</th>
-          <th class="no-print" style="width:28px"></th>
+          <th class="no-print"></th>
         </tr>
       </thead>
       <tbody class="fac-rows"></tbody>
