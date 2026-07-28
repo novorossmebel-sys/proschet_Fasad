@@ -172,7 +172,7 @@
     </select>
     <button class="btn" id="newBtn">＋ Новый</button>
     <button class="btn" id="saveBtn">💾 Сохранить файл</button>
-    <button class="btn primary" id="printBtn">🖶 Печать / PDF</button>
+    <button class="btn primary" id="printBtn" title="Печать двух документов: бланк заказа и договор">🖶 Печать / PDF (бланк + договор)</button>
   </div>
 
   <!-- Лист -->
@@ -274,6 +274,7 @@
   <div class="foot-hint no-print">
     Навигация по таблице — стрелками ↑ ↓ ← → и Enter, как в Excel. Галочка «обратка» делает строку жирной и добавляет цену покраски обратной стороны.
     В памяти браузера хранятся 10 последних расчётов (под именем из поля «Наименование / заказчик»); кнопка «Сохранить файл» выгружает расчёт отдельным документом.
+    Кнопка «Печать / PDF» формирует два документа подряд: сначала бланк заказа, затем договор (в диалоге печати выберите «Сохранить как PDF» для каждого).
   </div>
 </div>
 
@@ -313,6 +314,9 @@ const fmt = n => Math.round(n).toLocaleString("ru-RU");
 const fmt2 = n => n.toLocaleString("ru-RU",{minimumFractionDigits:2,maximumFractionDigits:2});
 function num(v){ const x=parseFloat(String(v).replace(",",".")); return isFinite(x)&&x>0?x:0; }
 function todayStr(){ return new Date().toLocaleDateString("ru-RU"); }
+const MONTHS_GEN=["января","февраля","марта","апреля","мая","июня","июля","августа","сентября","октября","ноября","декабря"];
+function dateParts(str){ const p=String(str||"").split("."); const d=p[0]||"__", m=+p[1], y=p[2]||new Date().getFullYear();
+  return {d, month:(m>=1&&m<=12)?MONTHS_GEN[m-1]:"__________", y}; }
 function nearestThk(t){ if(!t) return null; let b=THK[0],d=1e9; for(const k of THK){const dd=Math.abs(t-(+k)); if(dd<d){d=dd;b=k;}} return b; }
 function blankRow(){ return {name:"",nameAuto:true,h:"",w:"",t:"",qty:"",back:false}; }
 function blankFacade(){ return {name:"",material:0,rows:[blankRow(),blankRow(),blankRow()]}; }
@@ -465,9 +469,13 @@ function updateFacadeSub(sec,fac){
   sec.querySelector(".sub-sum").textContent=fmt(t.billed)+" ₽";
   sec.querySelector(".sub-note").textContent=t.minApplied?`учтена мин. площадь ${fmt2(opts.minArea)} м²`:"";
 }
-function renderGrandTotals(){
+function computeTotals(){
   let area=0,sum=0,qty=0;
   state.facades.forEach(fac=>{ const t=facadeTotals(fac); area+=t.area; sum+=t.billed; qty+=t.qty; });
+  return {area,sum,qty};
+}
+function renderGrandTotals(){
+  const {area,sum,qty}=computeTotals();
   $("#totFac").textContent=state.facades.length;
   $("#totArea").textContent=fmt2(area)+" м²";
   $("#totQty").textContent=fmt(qty);
@@ -589,6 +597,109 @@ async function saveDocumentFile(){
   flagSaved("Файл сохранён ✓");
 }
 
+/* ===== Печать: бланк заказа + договор (два PDF) ===== */
+function buildContractHtml(){
+  const {sum}=computeTotals();
+  const name=(state.docName||"").trim()||"____________________";
+  const phone=(state.phone||"").trim()||"____________________";
+  const no=state.docNo||"____";
+  const dp=dateParts(state.date);
+  const sumStr=fmt(sum)+" ₽";
+  const E=escapeHtml;
+  return `<!DOCTYPE html><html lang="ru"><head><meta charset="UTF-8"><title>Договор № ${E(no)} — ${E(name)}</title>
+<style>
+  @page{size:A4;margin:16mm}
+  *{box-sizing:border-box}
+  body{margin:0;font-family:"Times New Roman",Georgia,serif;font-size:12px;line-height:1.5;color:#111}
+  h1{font-size:15px;text-align:center;margin:0 0 2px;text-transform:uppercase;letter-spacing:.02em}
+  .sub{text-align:center;margin:0 0 14px}
+  .row{display:flex;justify-content:space-between;margin:0 0 14px}
+  p{margin:0 0 9px;text-align:justify}
+  .cl{font-weight:bold}
+  .req{margin-top:16px;display:flex;gap:30px;justify-content:space-between}
+  .req .col{width:48%}
+  .req b{display:block;margin-bottom:3px}
+  .sign{margin-top:22px}
+  .muted{color:#333}
+  .sum{font-weight:bold}
+  hr{border:none;border-top:1px solid #999;margin:14px 0}
+</style></head><body>
+  <h1>Договор № ${E(no)}</h1>
+  <div class="sub">на оказание услуг</div>
+  <div class="row"><span>г. Новороссийск</span><span>«${E(dp.d)}» ${E(dp.month)} ${E(dp.y)} г.</span></div>
+
+  <p><b>ИП Малюга Александр Сергеевич</b> (Исполнитель) и <b>${E(name)}</b> (ФИО Заказчика),
+  именуемые «Стороны», заключили договор о нижеследующем:</p>
+
+  <p><span class="cl">1. Предмет.</span> Исполнитель оказывает услуги: распил и кромление ЛДСП/фанеры,
+  изготовление фасадов из МДФ и шпона. Объём и характеристики — в смете расчёта стоимости материалов и услуг.</p>
+
+  <p><span class="cl">2. Цена.</span> Стоимость определяется по смете расчёта стоимости материалов и услуг
+  (неотъемлемая часть договора) и составляет <span class="sum">${E(sumStr)}</span>.
+  Оплата в течение 2-х рабочих дней с даты просчёта. Дата оплаты — дата зачисления средств.</p>
+
+  <p><span class="cl">3. Срок и приёмка.</span> Срок оказания услуг — 10 рабочих дней. Приёмка — по Акту сдачи-приёмки.
+  Если в течение 3 рабочих дней Заказчик не направил мотивированные возражения, услуги считаются принятыми.
+  При недостатках Исполнитель устраняет их в разумный срок либо стоимость уменьшается соразмерно.</p>
+
+  <p><span class="cl">4. Права и обязанности.</span> Исполнитель обязан оказать услуги надлежащего качества в срок,
+  вправе привлекать третьих лиц с сохранением ответственности. Заказчик обязан предоставить исходные данные/материалы
+  (если применимо) и своевременно оплатить услуги.</p>
+
+  <p><span class="cl">5. Ответственность сторон за просрочку.</span></p>
+  <p>5.1. За просрочку оказания услуг Исполнитель уплачивает Заказчику пеню в размере 0,1 % от стоимости неоказанных услуг
+  за каждый день просрочки — со дня, следующего за установленным сроком, до дня фактического исполнения включительно.</p>
+  <p>5.2. За просрочку оплаты Заказчик уплачивает Исполнителю пеню в размере 0,1 % от неоплаченной суммы за каждый день
+  просрочки — со дня, следующего за сроком оплаты, до дня поступления средств включительно.</p>
+  <p>5.3. Сторона освобождается от ответственности, если докажет, что просрочка произошла не по её вине либо из-за
+  обстоятельств непреодолимой силы. При наступлении таких обстоятельств сторона обязана уведомить другую сторону
+  в письменной форме в течение 3 рабочих дней.</p>
+  <p>5.4. Одновременно с неустойкой проценты по ст. 395 ГК РФ при просрочке денежного обязательства не начисляются.</p>
+
+  <p><span class="cl">6. Прочие условия.</span> Конфиденциальность, срок действия до полного исполнения, расторжение по соглашению
+  либо с уведомлением за ___ календарных дней. Споры — через переговоры, затем в суде по месту нахождения ответчика.
+  Изменения — только письменно. Сообщения по e-mail из реквизитов имеют юридическую силу.</p>
+
+  <hr>
+  <div class="cl">Реквизиты сторон</div>
+  <div class="req">
+    <div class="col muted">
+      <b>Исполнитель: ИП Малюга А. С.</b>
+      Адрес: 353919, Краснодарский край, г. Новороссийск, ул. Куникова, д. 55, к. 2<br>
+      ИНН: 231536618490, ОГРНИП: 323237500486910<br>
+      Р/с: 40802810926280005462<br>
+      Банк: Филиал «Ростовский» АО «Альфа-Банк», БИК: 046015207<br>
+      E-mail: aleksandr.maliuga@yandex.ru<br>
+      Телефон: +7 (988) 319-39-14
+      <div class="sign">Подпись: _________________ /Малюга А. С./</div>
+    </div>
+    <div class="col">
+      <b>Заказчик:</b>
+      ФИО: ${E(name)}<br>
+      Адрес: _________________________<br>
+      E-mail: _____________________<br>
+      Телефон: ${E(phone)}
+      <div class="sign">Подпись: _________________ /______________/</div>
+      <div style="margin-top:10px">«${E(dp.d)}» ${E(dp.month)} ${E(dp.y)} г.</div>
+      <div style="margin-top:6px">М.П.</div>
+    </div>
+  </div>
+</body></html>`;
+}
+function printContract(){
+  const html=buildContractHtml();
+  const f=document.createElement("iframe");
+  f.setAttribute("aria-hidden","true");
+  f.style.cssText="position:fixed;right:0;bottom:0;width:0;height:0;border:0;visibility:hidden";
+  document.body.appendChild(f);
+  const d=f.contentWindow.document; d.open(); d.write(html); d.close();
+  setTimeout(()=>{ try{ f.contentWindow.focus(); f.contentWindow.print(); }catch(e){} setTimeout(()=>f.remove(),2000); },350);
+}
+function printOrderAndContract(){
+  window.print();                 // 1-й файл: бланк заказа
+  setTimeout(printContract,500);  // 2-й файл: договор
+}
+
 /* ===== прайс-панель ===== */
 function renderPricePanel(){
   const mk=$("#makeRows"), fl=$("#flatRows");
@@ -677,7 +788,7 @@ function init(){
   $("#resetPriceBtn").addEventListener("click",()=>{ finishes=defFinishes(); opts={...DEF}; savePrices(); renderPricePanel(); state.facades.forEach(f=>{ if(f.material>=finishes.length) f.material=0; }); refreshAllMatSelects(); refreshAllRowsCalc(); });
 
   // тулбар
-  $("#printBtn").addEventListener("click",()=>window.print());
+  $("#printBtn").addEventListener("click",printOrderAndContract);
   $("#saveBtn").addEventListener("click",saveDocumentFile);
   $("#newBtn").addEventListener("click",()=>{ state=blankState(); currentName=""; $("#docName").value=""; $("#docPhone").value=state.phone; renderFacades(); $("#loadSelect").value=""; document.title="СРЕДА · Расчёт фасадов"; $("#docName").focus(); });
   $("#loadSelect").addEventListener("change",e=>{ if(e.target.value) loadDoc(e.target.value); });
